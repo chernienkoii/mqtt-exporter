@@ -4,3 +4,4 @@ paho-mqtt==2.1.0
     # via -r requirements/base.in
 prometheus-client==0.22.1
     # via -r requirements/base.in
+mysql-connector-python

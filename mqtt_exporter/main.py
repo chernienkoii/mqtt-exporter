@@ -12,6 +12,8 @@ import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+import mysql.connector
+import threading
 
 import paho.mqtt.client as mqtt
 from prometheus_client import (
@@ -66,6 +68,44 @@ def _create_msg_counter_metrics():
             [settings.TOPIC_LABEL],
         )
 
+def load_topics_from_db():
+    topics = []
+    try:
+        conn = mysql.connector.connect(
+            host=settings.DB_HOST,
+            port=settings.DB_PORT,
+            user=settings.DB_USER,
+            password=settings.DB_PASSWORD,
+            database=settings.DB_NAME,
+        )
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT chip_id FROM {settings.DB_TABLE}")
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        for row in rows:
+            device_id = str(row[0])
+            for prefix in settings.DB_PREFIXES:
+                prefix = prefix.strip()
+                if not prefix:
+                    continue
+                topic = f"{prefix}{device_id}{settings.DB_SUFFIX}"
+                topics.append(topic)
+    except Exception as e:
+        LOG.error("Failed to load topics from DB: %s", e)
+
+    return topics
+
+def refresh_topics_periodically(client, interval=300):
+    def refresh():
+        while True:
+            new_topics = load_topics_from_db()
+            for t in new_topics:
+                client.subscribe(t)
+            time.sleep(interval)
+    t = threading.Thread(target=refresh, daemon=True)
+    t.start()
 
 def subscribe(client, _, __, reason_code, properties):
     """Subscribe to mqtt events (callback)."""
@@ -75,9 +115,18 @@ def subscribe(client, _, __, reason_code, properties):
 
     client.user_data_set(user_data)
 
-    for s in settings.TOPIC.split(","):
+    if settings.USE_DB_TOPICS:
+        topics = load_topics_from_db()
+    else:
+        topics = settings.TOPIC.split(",")
+
+    for s in topics:
+        s = s.strip()
+        if not s:
+            continue
         LOG.info('subscribing to "%s"', s)
         client.subscribe(s)
+
     if reason_code != mqtt.CONNACK_ACCEPTED:
         LOG.error("MQTT %s", mqtt.connack_string(reason_code))
 
@@ -549,6 +598,11 @@ def run():
         client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
     client.connect(settings.MQTT_ADDRESS, settings.MQTT_PORT, settings.MQTT_KEEPALIVE)
     client.loop_forever()
+
+
+    if settings.USE_DB_TOPICS:
+        refresh_topics_periodically(client, interval=int(os.getenv("DB_REFRESH_INTERVAL", "300")))
+
 
 
 def main():

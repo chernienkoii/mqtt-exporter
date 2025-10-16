@@ -30,3 +30,15 @@ PROMETHEUS_ADDRESS = os.getenv("PROMETHEUS_ADDRESS", "0.0.0.0")
 PROMETHEUS_PORT = int(os.getenv("PROMETHEUS_PORT", "9000"))
 
 KEEP_FULL_TOPIC = os.getenv("KEEP_FULL_TOPIC", "False") == "True"
+
+
+# Database settings
+USE_DB_TOPICS = os.getenv("USE_DB_TOPICS", "False") == "True"
+DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_USER = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_NAME = os.getenv("DB_NAME", "mqtt_exporter")
+DB_TABLE = os.getenv("DB_TABLE", "mqtt_topics")
+DB_PREFIXES = os.getenv("DB_PREFIXES", "fleetos/device/status/").split(",")
+DB_REFRESH_INTERVAL = int(os.getenv("DB_REFRESH_INTERVAL", "300"))
